@@ -1,37 +1,61 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"uniun/network/internal/transport"
-	"uniun/network/internal/usecase"
+	// Import concrete service packages
+	"uniun/services/connectionservice"
+	"uniun/services/connectionservice/transport/websocket"
+	"uniun/services/notificationservice"
+	"uniun/services/processingservice"
 )
 
 func main() {
-	mgr := usecase.NewManager()
-	defer mgr.Stop()
+	// --- Dependency Injection and Service Composition ---
+	// 1. Create concrete service instances using their constructors.
+	connService := connectionservice.NewConnectionService()
+	notificationSvc := notificationservice.NewService(connService)              // Injects connService as a MessageSender
+	processingSvc := processingservice.NewService(connService, notificationSvc) // Injects connService and notificationSvc
 
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		transport.ServeWS(mgr, w, r)
-	})
+	// --- Start Services ---
+	connService.Start()
+	processingSvc.Start()
 
-	srv := &http.Server{Addr: ":8080"}
+	// --- Set up Transport Layer ---
+	wsHandler := websocket.NewHandler(connService) // Inject connService into its own handler
+	mux := http.NewServeMux()
+	mux.Handle("/ws", wsHandler)
 
+	server := &http.Server{Addr: ":8080", Handler: mux}
+
+	// --- Graceful Shutdown ---
 	go func() {
-		log.Println("Server listening on :8080")
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %v", err)
+		log.Println("Server starting on http://localhost:8080")
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("could not listen on %s: %v\n", server.Addr, err)
 		}
 	}()
 
-	// graceful shutdown on SIGINT/SIGTERM
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
-	log.Println("Shutting down server")
-	_ = srv.Close()
+
+	log.Println("Shutting down application...")
+
+	processingSvc.Stop()
+	connService.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Server Shutdown Failed:%+v", err)
+	}
+
+	log.Println("Application gracefully stopped")
 }

@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package message;
+
+option go_package = "uniun/pkg/protobuf";
+
+// DataBlock is the message format sent from client to server.
+message DataBlock {
+  string type = 1;      // e.g., "user.update", "data.stream"
+  bytes payload = 2;    // The actual data payload
+}
