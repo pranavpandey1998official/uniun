@@ -1,8 +1,12 @@
 package connectionservice
 
 import (
+	"context"
 	"fmt"
+	"log"
+	"net/http"
 	"sync"
+	"time"
 	"uniun/pkg/domain"
 	"uniun/pkg/protobuf"
 	service_interfaces "uniun/pkg/serviceInterfaces"
@@ -14,48 +18,97 @@ import (
 
 // connectionService is the concrete implementation. It's unexported.
 type connectionService struct {
-	clients         map[string]*domain.Client
-	mu              sync.RWMutex
-	register        chan *domain.Client
-	unregister      chan *domain.Client
-	inboundMessages chan *domain.InboundMessage
-	stop            chan struct{}
+	clients       map[string]*domain.Client
+	mu            sync.RWMutex
+	register      chan *domain.Client
+	unregister    chan *domain.Client
+	subscribers   []chan *domain.InboundMessage
+	subsScriberMu sync.RWMutex
+	server        *http.Server
+	stop          chan struct{}
 }
 
+var (
+	once             sync.Once
+	singletonService *connectionService
+)
+
 // NewConnectionService is the constructor that returns the public interface.
-func NewConnectionService() service_interfaces.ConnectionService {
-	return &connectionService{
-		clients:         make(map[string]*domain.Client),
-		register:        make(chan *domain.Client),
-		unregister:      make(chan *domain.Client),
-		inboundMessages: make(chan *domain.InboundMessage, 256),
-		stop:            make(chan struct{}),
-	}
+func GetService() service_interfaces.ConnectionService {
+	once.Do(func() {
+		singletonService = &connectionService{
+			clients:     make(map[string]*domain.Client),
+			register:    make(chan *domain.Client),
+			unregister:  make(chan *domain.Client),
+			subscribers: make([]chan *domain.InboundMessage, 0),
+			stop:        make(chan struct{}),
+		}
+	})
+	return singletonService
+}
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // allow all origins for demo
+	},
 }
 
 // Start runs the connectionService's central loop in a goroutine.
 func (s *connectionService) Start() {
-	go s.run()
+	websocketHandler := func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			fmt.Printf("failed to upgrade connection: %v\n", err)
+			return
+		}
+		s.registerClient(conn)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", websocketHandler)
+	s.server = &http.Server{Addr: ":8080", Handler: mux}
+	go func() {
+		log.Println("Server starting on http://localhost:8080")
+		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("could not listen on %s: %v\n", s.server.Addr, err)
+		}
+	}()
+	<-s.stop
 }
 
 // Stop signals the connectionService to shut down.
 func (s *connectionService) Stop() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.server.Shutdown(ctx); err != nil {
+		log.Fatalf("Server Shutdown Failed:%+v", err)
+	}
 	close(s.stop)
 }
 
 // GetMessageQueue returns a read-only channel for inbound messages.
-func (s *connectionService) GetMessageQueue() <-chan *domain.InboundMessage {
-	return s.inboundMessages
+func (s *connectionService) Subscribe() <-chan *domain.InboundMessage {
+	s.subsScriberMu.Lock()
+	defer s.subsScriberMu.Unlock()
+
+	ch := make(chan *domain.InboundMessage, 100)
+	s.subscribers = append(s.subscribers, ch)
+	return ch
 }
 
 // RegisterClient creates a new client entity and sends it to the register channel.
-func (s *connectionService) RegisterClient(conn *websocket.Conn) {
+func (s *connectionService) registerClient(conn *websocket.Conn) {
 	client := &domain.Client{
 		ID:   uuid.NewString(), // Generate a unique local ID
 		Conn: conn,
 		Send: make(chan []byte, 256),
 	}
-	s.register <- client
+	s.mu.Lock()
+	s.clients[client.ID] = client
+	s.mu.Unlock()
+	fmt.Printf("Client registered: %s\n", client.ID)
+	// Start goroutines to handle reading and writing for this client.
+	go s.writePump(client)
+	go s.readPump(client)
 }
 
 // SendMessage finds the client and sends the message payload.
@@ -92,55 +145,17 @@ func (s *connectionService) SendMessage(msg *domain.OutboundMessage) error {
 	return nil
 }
 
-// run is the central loop that manages the connectionService's state.
-// By handling registrations and unregistrations here, we avoid
-// needing locks for map modifications.
-func (s *connectionService) run() {
-	fmt.Println("Connection Service started.")
-	defer func() {
-		fmt.Println("Connection Service stopped.")
-	}()
-
-	for {
-		select {
-		case client := <-s.register:
-			s.mu.Lock()
-			s.clients[client.ID] = client
-			s.mu.Unlock()
-			fmt.Printf("Client registered: %s\n", client.ID)
-			// Start goroutines to handle reading and writing for this client.
-			go s.writePump(client)
-			go s.readPump(client)
-
-		case client := <-s.unregister:
-			s.mu.Lock()
-			if _, ok := s.clients[client.ID]; ok {
-				delete(s.clients, client.ID)
-				client.Close()
-				fmt.Printf("Client unregistered: %s\n", client.ID)
-			}
-			s.mu.Unlock()
-
-		case <-s.stop:
-			s.mu.Lock()
-			for id, client := range s.clients {
-				fmt.Printf("Closing connection for client: %s\n", id)
-				client.Close()
-				delete(s.clients, id)
-			}
-			s.mu.Unlock()
-			close(s.inboundMessages) // Signal consumers that we are done.
-			return
-		}
-	}
-}
-
 // readPump pumps messages from the websocket connection to the inboundMessages channel.
 // This is the "receiveMessage" and "convertMessage" logic.
 func (s *connectionService) readPump(client *domain.Client) {
 	defer func() {
-		// Ensure unregistration happens on any exit from this function.
-		s.unregister <- client
+		s.mu.Lock()
+		if _, ok := s.clients[client.ID]; ok {
+			delete(s.clients, client.ID)
+			client.Close()
+			fmt.Printf("Client unregistered: %s\n", client.ID)
+		}
+		s.mu.Unlock()
 	}()
 
 	for {
@@ -168,7 +183,15 @@ func (s *connectionService) readPump(client *domain.Client) {
 		}
 
 		// Push the object instance into the queue for other services
-		s.inboundMessages <- inboundMsg
+		s.sendMessagesToSubscribers(inboundMsg)
+	}
+}
+
+func (s *connectionService) sendMessagesToSubscribers(msg *domain.InboundMessage) {
+	s.subsScriberMu.RLock()
+	defer s.subsScriberMu.RUnlock()
+	for _, ch := range s.subscribers {
+		ch <- msg
 	}
 }
 
