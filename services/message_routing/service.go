@@ -38,16 +38,9 @@ func GetService(provider service_interfaces.ConnectionService) service_interface
 	return singletonService
 }
 
-// Start begins the main message consumption and routing loop.
+// run is the main loop that reads from the ConnectionService and routes messages.
 func (s *messageRoutingService) Start() {
 	fmt.Println("[MessageRoutingService] Started.")
-	s.run()
-	fmt.Println("[MessageRoutingService] Stopped.")
-}
-
-// run is the main loop that reads from the ConnectionService and routes messages.
-func (s *messageRoutingService) run() {
-
 	for {
 		select {
 		case msg, ok := <-s.inboundQueue:
@@ -63,9 +56,12 @@ func (s *messageRoutingService) run() {
 			close(s.requestBlockCh)
 			close(s.publishBlockCh)
 			close(s.interestedChainsCh)
+			fmt.Println("[MessageRoutingService] Stopped.")
 			return
 		}
+
 	}
+
 }
 
 // Stop gracefully shuts down the service by closing the stop channel.

@@ -21,9 +21,9 @@ func main() {
 
 	// --- Start Services ---
 	log.Println("Starting services...")
-	connService.Start()
-	msgRoutingService.Start()
-	sendMsgService.Start()
+	go connService.Start()
+	go msgRoutingService.Start()
+	go sendMsgService.Start()
 
 	// Wait for interrupt signal to gracefully shutdown
 	stop := make(chan os.Signal, 1)

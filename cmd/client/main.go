@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 	"uniun/pkg/protobuf" // Uses the same shared protobuf definition
 
@@ -94,11 +95,16 @@ func main() {
 					fmt.Print("> ")
 					continue
 				}
-
+				typ := "chat.message"
+				payload := text
+				if i := strings.IndexByte(text, ':'); i > 0 {
+					typ = text[:i]
+					payload = text[i+1:]
+				}
 				// Construct the protobuf message from user input.
 				msgToSend := &protobuf.DataBlock{
-					Type:    "chat.message",
-					Payload: []byte(text),
+					Type:    typ,
+					Payload: []byte(payload),
 				}
 				bytesToSend, err := proto.Marshal(msgToSend)
 				if err != nil {
