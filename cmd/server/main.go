@@ -7,30 +7,34 @@ import (
 	"syscall"
 
 	// Import concrete service packages
-	connectionservice "uniun/services/connectionService"
-	"uniun/services/notificationservice"
-	"uniun/services/processingservice"
+	connectionservice "uniun/services/connection_service"
+	messagerouting "uniun/services/message_routing"
+	sendmessage "uniun/services/send_message"
 )
 
 func main() {
 	// --- Dependency Injection and Service Composition ---
-	// 1. Create concrete service instances using their constructors.
-	connService := connectionservice.GetService()                               // Singleton instance
-	notificationSvc := notificationservice.NewService(connService)              // Injects connService as a MessageSender
-	processingSvc := processingservice.NewService(connService, notificationSvc) // Injects connService and notificationSvc
+	// Create singleton service instance using their constructors.
+	connService := connectionservice.GetService() // Singleton instance
+	msgRoutingService := messagerouting.GetService(connService)
+	sendMsgService := sendmessage.GetService(connService)
 
 	// --- Start Services ---
+	log.Println("Starting services...")
 	connService.Start()
-	processingSvc.Start()
+	msgRoutingService.Start()
+	sendMsgService.Start()
 
+	// Wait for interrupt signal to gracefully shutdown
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
 	log.Println("Shutting down application...")
 
-	processingSvc.Stop()
 	connService.Stop()
+	msgRoutingService.Stop()
+	sendMsgService.Stop()
 
 	log.Println("Application gracefully stopped")
 }

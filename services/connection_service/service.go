@@ -9,7 +9,7 @@ import (
 	"time"
 	"uniun/pkg/domain"
 	"uniun/pkg/protobuf"
-	service_interfaces "uniun/pkg/serviceInterfaces"
+	service_interfaces "uniun/pkg/service_interfaces"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -55,6 +55,7 @@ var upgrader = websocket.Upgrader{
 
 // Start runs the connectionService's central loop in a goroutine.
 func (s *connectionService) Start() {
+	log.Println("ConnectionService started")
 	websocketHandler := func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -95,6 +96,16 @@ func (s *connectionService) Subscribe() <-chan *domain.InboundMessage {
 	return ch
 }
 
+// abstraction for registering a client connection
+func (s *connectionService) RegisterConnection(conn any) error {
+	wsConn, ok := conn.(*websocket.Conn)
+	if !ok {
+		return fmt.Errorf("invalid connection type: expected *websocket.Conn")
+	}
+	s.registerClient(wsConn)
+	return nil
+}
+
 // RegisterClient creates a new client entity and sends it to the register channel.
 func (s *connectionService) registerClient(conn *websocket.Conn) {
 	client := &domain.Client{
@@ -113,9 +124,7 @@ func (s *connectionService) registerClient(conn *websocket.Conn) {
 
 // SendMessage finds the client and sends the message payload.
 func (s *connectionService) SendMessage(msg *domain.OutboundMessage) error {
-	s.mu.RLock()
 	client, ok := s.clients[msg.ClientID]
-	s.mu.RUnlock()
 
 	if !ok {
 		return fmt.Errorf("client with ID %s not found", msg.ClientID)

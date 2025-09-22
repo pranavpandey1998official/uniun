@@ -3,7 +3,7 @@ package websocket
 import (
 	"fmt"
 	"net/http"
-	service_interfaces "uniun/pkg/serviceInterfaces"
+	service_interfaces "uniun/pkg/service_interfaces"
 
 	"github.com/gorilla/websocket"
 )
@@ -28,5 +28,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("failed to upgrade connection: %v\n", err)
 		return
 	}
-	h.connService.RegisterClient(conn)
+	// Registers a new client connection in mapping
+	if err := h.connService.RegisterConnection(conn); err != nil {
+		fmt.Printf("failed to register client: %v\n", err)
+		conn.Close()
+		return
+	}
 }
