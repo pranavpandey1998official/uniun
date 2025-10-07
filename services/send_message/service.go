@@ -6,6 +6,7 @@ import (
 	"sync"
 	"uniun/pkg/domain"
 	service_interfaces "uniun/pkg/service_interfaces"
+	connectionservice "uniun/services/connection_service"
 )
 
 // sendMessageService is the concrete implementation following singleton pattern
@@ -30,10 +31,10 @@ var (
 )
 
 // GetService returns the singleton instance of SendMessageService
-func GetService(connService service_interfaces.ConnectionService) service_interfaces.SendMessageService {
+func GetService() service_interfaces.SendMessageService {
 	once.Do(func() {
 		singletonService = &sendMessageService{
-			connService:  connService,
+			connService:  connectionservice.GetService(),
 			messageQueue: make(chan *domain.OutboundMessage, 1000), // Buffered channel for high throughput
 			stop:         make(chan struct{}),
 			active:       false,
@@ -53,7 +54,7 @@ func (s *sendMessageService) Start() {
 	}
 
 	s.active = true
-	log.Println("SendMessageService started")
+	log.Println("[SendMessageService] started")
 
 	// Start the message processing goroutine
 	go s.processMessages()
@@ -105,7 +106,7 @@ func (s *sendMessageService) EnqueueMessage(msg *domain.OutboundMessage) error {
 
 // processMessages is the main message processing loop
 func (s *sendMessageService) processMessages() {
-	log.Println("SendMessageService message processor started")
+	log.Println("[SendMessageService] message processor started")
 
 	for {
 		select {

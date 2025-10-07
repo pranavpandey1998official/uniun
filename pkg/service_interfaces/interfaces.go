@@ -1,6 +1,7 @@
 package serviceInterfaces
 
 import (
+	"errors"
 	"uniun/pkg/domain"
 )
 
@@ -25,9 +26,6 @@ type ConnectionService interface {
 type MessageRoutingService interface {
 	Start()
 	Stop()
-	GetRequestBlock() (*domain.InboundMessage, bool)
-	GetPublishBlock() (*domain.InboundMessage, bool)
-	GetInterestedChains() (*domain.InboundMessage, bool)
 }
 
 type SendMessageService interface {
@@ -35,4 +33,21 @@ type SendMessageService interface {
 	Start()
 	Stop()
 	EnqueueMessage(msg *domain.OutboundMessage) error
+}
+
+// ErrBlockNotFound is returned when a block with a given ID is not found in the database.
+var ErrBlockNotFound = errors.New("block not found")
+
+type DatabaseService interface {
+	Start() error
+	Stop()
+	StoreBlock(block *domain.Block) error
+	FetchBlock(id string) (*domain.Block, error)
+}
+
+// RequestBlockService is the service for requesting blocks.
+type RequestBlockService interface {
+	Start()
+	Stop()
+	EnqueueRequest(msg *domain.InboundMessage) error
 }
