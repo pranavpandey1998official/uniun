@@ -15,3 +15,8 @@ type OutboundMessage struct {
 	Type     string
 	Payload  []byte
 }
+
+// CloseMessage represents a message to close a connection.
+type CloseMessage struct {
+	ClientID string
+}

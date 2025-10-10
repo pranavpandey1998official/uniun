@@ -6,7 +6,6 @@ import (
 	"uniun/pkg/domain"
 	service_interfaces "uniun/pkg/service_interfaces"
 	connectionservice "uniun/services/connection_service"
-	requestblock "uniun/services/request_block"
 )
 
 var (
@@ -16,11 +15,12 @@ var (
 
 // messageRoutingService is the private concrete implementation.
 type messageRoutingService struct {
-	connService     service_interfaces.ConnectionService
-	reqBlockService service_interfaces.RequestBlockService
+	connService service_interfaces.ConnectionService
 
+	reqBlockCh         chan *domain.InboundMessage
 	publishBlockCh     chan *domain.InboundMessage
 	interestedChainsCh chan *domain.InboundMessage
+	watchBlockCh       chan *domain.InboundMessage
 
 	stop chan struct{}
 }
@@ -30,9 +30,10 @@ func GetService() service_interfaces.MessageRoutingService {
 	once.Do(func() {
 		singletonService = &messageRoutingService{
 			connService:        connectionservice.GetService(),
-			reqBlockService:    requestblock.GetService(),
+			reqBlockCh:         make(chan *domain.InboundMessage, 128),
 			publishBlockCh:     make(chan *domain.InboundMessage, 128),
 			interestedChainsCh: make(chan *domain.InboundMessage, 128),
+			watchBlockCh:       make(chan *domain.InboundMessage, 128),
 			stop:               make(chan struct{}),
 		}
 	})
@@ -55,8 +56,10 @@ func (s *messageRoutingService) Start() {
 		case <-s.stop:
 			// Stop signal received.
 			// Close all downstream channels to signal subscribers that no more data is coming.
+			close(s.reqBlockCh)
 			close(s.publishBlockCh)
 			close(s.interestedChainsCh)
+			close(s.watchBlockCh)
 			fmt.Println("[MessageRoutingService] Stopped.")
 			return
 		}
@@ -72,14 +75,35 @@ func (s *messageRoutingService) Stop() {
 func (s *messageRoutingService) routeMessage(msg *domain.InboundMessage) {
 	// The core routing logic remains the same, as this is the service's primary responsibility.
 	switch msg.Type {
+	case "close.client":
+		s.reqBlockCh <- msg
+		s.interestedChainsCh <- msg
+		s.watchBlockCh <- msg
 	case "request.block":
-		s.reqBlockService.EnqueueRequest(msg)
+		s.reqBlockCh <- msg
 	case "publish.block":
 		s.publishBlockCh <- msg
 	case "interested.chains":
 		s.interestedChainsCh <- msg
-	case "watch.thought": // TODO: implement
+	case "watch.thought":
+		s.watchBlockCh <- msg
 	default:
 		fmt.Printf("[MessageRoutingService] Dropping unroutable message of type: %s\n", msg.Type)
 	}
+}
+
+func (s *messageRoutingService) GetRequestBlockChannel() <-chan *domain.InboundMessage {
+	return s.reqBlockCh
+}
+
+func (s *messageRoutingService) GetPublishBlockChannel() <-chan *domain.InboundMessage {
+	return s.publishBlockCh
+}
+
+func (s *messageRoutingService) GetInterestedChainsChannel() <-chan *domain.InboundMessage {
+	return s.interestedChainsCh
+}
+
+func (s *messageRoutingService) GetWatchBlockChannel() <-chan *domain.InboundMessage {
+	return s.watchBlockCh
 }

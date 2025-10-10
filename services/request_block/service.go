@@ -8,19 +8,18 @@ import (
 	"uniun/pkg/domain"
 	"uniun/pkg/protobuf"
 	service_interfaces "uniun/pkg/service_interfaces"
+	connectionservice "uniun/services/connection_service"
 	dbservice "uniun/services/database"
-	sendmessage "uniun/services/send_message"
+	messagerouting "uniun/services/message_routing"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type requestBlockService struct {
-	db     service_interfaces.DatabaseService
-	sender service_interfaces.SendMessageService
-
-	// Internal channels
-	requestQueue chan *domain.InboundMessage
+	db         service_interfaces.DatabaseService
+	sender     service_interfaces.ConnectionService
+	msgRouting service_interfaces.MessageRoutingService
 
 	// Control
 	stop     chan struct{}
@@ -36,10 +35,10 @@ var (
 func GetService() service_interfaces.RequestBlockService {
 	once.Do(func() {
 		singletonService = &requestBlockService{
-			db:           dbservice.GetService(),
-			sender:       sendmessage.GetService(),
-			requestQueue: make(chan *domain.InboundMessage, 512),
-			stop:         make(chan struct{}),
+			db:         dbservice.GetService(),
+			sender:     connectionservice.GetService(),
+			msgRouting: messagerouting.GetService(),
+			stop:       make(chan struct{}),
 		}
 	})
 	return singletonService
@@ -48,10 +47,10 @@ func GetService() service_interfaces.RequestBlockService {
 // Start simply launches the processor goroutine.
 func (s *requestBlockService) Start() {
 	log.Println("[RequestBlockService] started")
-
+	reqBlockCh := s.msgRouting.GetRequestBlockChannel()
 	for {
 		select {
-		case msg := <-s.requestQueue:
+		case msg := <-reqBlockCh:
 			if err := s.handleRequest(msg); err != nil {
 				log.Printf("[RequestBlockService] handle error: %v", err)
 			}
@@ -70,24 +69,9 @@ func (s *requestBlockService) Stop() {
 	})
 }
 
-// EnqueueRequest uses a select statement to be state-aware without a mutex.
-func (s *requestBlockService) EnqueueRequest(msg *domain.InboundMessage) error {
-	if msg == nil {
-		return fmt.Errorf("received nil request")
-	}
-
-	select {
-	case s.requestQueue <- msg:
-		return nil
-	case <-s.stop:
-		return fmt.Errorf("RequestBlockService is not running")
-	default:
-		return fmt.Errorf("request queue is full")
-	}
-}
-
 // handleRequest fetches the block and forwards the message to the send queue with appended payload.
 func (s *requestBlockService) handleRequest(msg *domain.InboundMessage) error {
+	sendMessageCh := s.sender.GetSendMessageChannel()
 	if msg == nil {
 		return fmt.Errorf("received nil request")
 	}
@@ -105,7 +89,7 @@ func (s *requestBlockService) handleRequest(msg *domain.InboundMessage) error {
 			Type:     "error.block_not_found",
 			Payload:  []byte(fmt.Sprintf("block '%s' not found", blockID)),
 		}
-		_ = s.sender.EnqueueMessage(errMsg)
+		sendMessageCh <- errMsg
 		return fmt.Errorf("fetch block failed for id %s: %w", blockID, err)
 	}
 
@@ -132,9 +116,8 @@ func (s *requestBlockService) handleRequest(msg *domain.InboundMessage) error {
 		Payload: combined,
 	}
 
-	if err := s.sender.EnqueueMessage(out); err != nil {
-		return fmt.Errorf("enqueue outbound message failed: %w", err)
-	}
+	// add more error handling later
+	sendMessageCh <- out
 
 	log.Printf("[RequestBlockService] responded to client %s for block %s", msg.ClientID, blockID)
 	return nil

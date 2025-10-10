@@ -12,7 +12,7 @@ type MessageProvider interface {
 
 // MessageSender allows sending outbound messages to a client.
 type MessageSender interface {
-	SendMessage(msg *domain.OutboundMessage) error
+	GetSendMessageChannel() chan<- *domain.OutboundMessage
 }
 
 type ConnectionService interface {
@@ -26,14 +26,19 @@ type ConnectionService interface {
 type MessageRoutingService interface {
 	Start()
 	Stop()
+	GetRequestBlockChannel() <-chan *domain.InboundMessage
+	GetPublishBlockChannel() <-chan *domain.InboundMessage
+	GetInterestedChainsChannel() <-chan *domain.InboundMessage
+	GetWatchBlockChannel() <-chan *domain.InboundMessage
 }
 
-type SendMessageService interface {
-	// Public methods
-	Start()
-	Stop()
-	EnqueueMessage(msg *domain.OutboundMessage) error
-}
+// this service is not used anymore send through connection service
+// type SendMessageService interface {
+// 	// Public methods
+// 	Start()
+// 	Stop()
+// 	EnqueueMessage(msg *domain.OutboundMessage) error
+// }
 
 // ErrBlockNotFound is returned when a block with a given ID is not found in the database.
 var ErrBlockNotFound = errors.New("block not found")
@@ -49,5 +54,20 @@ type DatabaseService interface {
 type RequestBlockService interface {
 	Start()
 	Stop()
-	EnqueueRequest(msg *domain.InboundMessage) error
+}
+
+type PublishBlockService interface {
+	Start()
+	Stop()
+	GetFilteredBlockChannel() <-chan *domain.InboundMessage
+}
+
+type InterestedChainsService interface {
+	Start()
+	Stop()
+}
+
+type WatchBlockService interface {
+	Start()
+	Stop()
 }

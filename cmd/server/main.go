@@ -11,7 +11,6 @@ import (
 	database "uniun/services/database"
 	messagerouting "uniun/services/message_routing"
 	requestblock "uniun/services/request_block"
-	sendmessage "uniun/services/send_message"
 )
 
 func main() {
@@ -19,14 +18,12 @@ func main() {
 	// Create singleton service instance using their constructors.
 	connService := connectionservice.GetService() // Singleton instance
 	msgRoutingService := messagerouting.GetService()
-	sendMsgService := sendmessage.GetService()
 	databaseService := database.GetService()
 	requestBlockService := requestblock.GetService()
 	// --- Start Services ---
 	log.Println("Starting services...")
 	go connService.Start()
 	go msgRoutingService.Start()
-	go sendMsgService.Start()
 	go databaseService.Start()
 	go requestBlockService.Start()
 
@@ -39,7 +36,6 @@ func main() {
 
 	connService.Stop()
 	msgRoutingService.Stop()
-	sendMsgService.Stop()
 
 	log.Println("Application gracefully stopped")
 }

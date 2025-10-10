@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// connectionService is the concrete implementation. It's unexported.
+// connectionService is the concrete implementation.
 type connectionService struct {
 	clients       map[string]*domain.Client
 	mu            sync.RWMutex
@@ -26,6 +26,7 @@ type connectionService struct {
 	subsScriberMu sync.RWMutex
 	server        *http.Server
 	stop          chan struct{}
+	sendMessageCh chan *domain.OutboundMessage
 }
 
 var (
@@ -37,11 +38,12 @@ var (
 func GetService() service_interfaces.ConnectionService {
 	once.Do(func() {
 		singletonService = &connectionService{
-			clients:     make(map[string]*domain.Client),
-			register:    make(chan *domain.Client),
-			unregister:  make(chan *domain.Client),
-			subscribers: make([]chan *domain.InboundMessage, 0),
-			stop:        make(chan struct{}),
+			clients:       make(map[string]*domain.Client),
+			register:      make(chan *domain.Client),
+			unregister:    make(chan *domain.Client),
+			subscribers:   make([]chan *domain.InboundMessage, 0),
+			stop:          make(chan struct{}),
+			sendMessageCh: make(chan *domain.OutboundMessage, 1000),
 		}
 	})
 	return singletonService
@@ -74,6 +76,20 @@ func (s *connectionService) Start() {
 		}
 	}()
 	<-s.stop
+
+	//Start the consumer goroutine to process outgoing messages.
+	go func() {
+		for msg := range s.sendMessageCh {
+			if err := s.sendMessage(msg); err != nil {
+				log.Printf("Error sending message to client %s: %v", msg.ClientID, err)
+			}
+		}
+	}()
+}
+
+// GetSendMessageChannel returns the directional send only channel for messages.
+func (s *connectionService) GetSendMessageChannel() chan<- *domain.OutboundMessage {
+	return s.sendMessageCh
 }
 
 // Stop signals the connectionService to shut down.
@@ -123,7 +139,8 @@ func (s *connectionService) registerClient(conn *websocket.Conn) {
 }
 
 // SendMessage finds the client and sends the message payload.
-func (s *connectionService) SendMessage(msg *domain.OutboundMessage) error {
+func (s *connectionService) sendMessage(msg *domain.OutboundMessage) error {
+	// add more error handling later
 	client, ok := s.clients[msg.ClientID]
 
 	if !ok {
@@ -165,6 +182,14 @@ func (s *connectionService) readPump(client *domain.Client) {
 			fmt.Printf("Client unregistered: %s\n", client.ID)
 		}
 		s.mu.Unlock()
+
+		//send a close client message to other services
+		// later add a close message type to the protobuf
+		s.sendMessagesToSubscribers(&domain.InboundMessage{
+			ClientID: client.ID,
+			Type:     "close.client",
+			Payload:  nil,
+		})
 	}()
 
 	for {

@@ -2,13 +2,14 @@
 // versions:
 // 	protoc-gen-go v1.36.9
 // 	protoc        v6.32.1
-// source: message.proto
+// source: pkg/protobuf/message.proto
 
 package protobuf
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -32,7 +33,7 @@ type DataBlock struct {
 
 func (x *DataBlock) Reset() {
 	*x = DataBlock{}
-	mi := &file_message_proto_msgTypes[0]
+	mi := &file_pkg_protobuf_message_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -44,7 +45,7 @@ func (x *DataBlock) String() string {
 func (*DataBlock) ProtoMessage() {}
 
 func (x *DataBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[0]
+	mi := &file_pkg_protobuf_message_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57,7 +58,7 @@ func (x *DataBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DataBlock.ProtoReflect.Descriptor instead.
 func (*DataBlock) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{0}
+	return file_pkg_protobuf_message_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *DataBlock) GetType() string {
@@ -74,59 +75,127 @@ func (x *DataBlock) GetPayload() []byte {
 	return nil
 }
 
-var File_message_proto protoreflect.FileDescriptor
+// Block is the structure we will serialize and store in the database.
+type Block struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
 
-const file_message_proto_rawDesc = "" +
+func (x *Block) Reset() {
+	*x = Block{}
+	mi := &file_pkg_protobuf_message_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Block) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Block) ProtoMessage() {}
+
+func (x *Block) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_protobuf_message_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Block.ProtoReflect.Descriptor instead.
+func (*Block) Descriptor() ([]byte, []int) {
+	return file_pkg_protobuf_message_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Block) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Block) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *Block) GetTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Timestamp
+	}
+	return nil
+}
+
+var File_pkg_protobuf_message_proto protoreflect.FileDescriptor
+
+const file_pkg_protobuf_message_proto_rawDesc = "" +
 	"\n" +
-	"\rmessage.proto\x12\amessage\"9\n" +
+	"\x1apkg/protobuf/message.proto\x12\amessage\x1a\x1fgoogle/protobuf/timestamp.proto\"9\n" +
 	"\tDataBlock\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x18\n" +
-	"\apayload\x18\x02 \x01(\fR\apayloadB\x14Z\x12uniun/pkg/protobufb\x06proto3"
+	"\apayload\x18\x02 \x01(\fR\apayload\"e\n" +
+	"\x05Block\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x128\n" +
+	"\ttimestamp\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestampB\x14Z\x12uniun/pkg/protobufb\x06proto3"
 
 var (
-	file_message_proto_rawDescOnce sync.Once
-	file_message_proto_rawDescData []byte
+	file_pkg_protobuf_message_proto_rawDescOnce sync.Once
+	file_pkg_protobuf_message_proto_rawDescData []byte
 )
 
-func file_message_proto_rawDescGZIP() []byte {
-	file_message_proto_rawDescOnce.Do(func() {
-		file_message_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_message_proto_rawDesc), len(file_message_proto_rawDesc)))
+func file_pkg_protobuf_message_proto_rawDescGZIP() []byte {
+	file_pkg_protobuf_message_proto_rawDescOnce.Do(func() {
+		file_pkg_protobuf_message_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pkg_protobuf_message_proto_rawDesc), len(file_pkg_protobuf_message_proto_rawDesc)))
 	})
-	return file_message_proto_rawDescData
+	return file_pkg_protobuf_message_proto_rawDescData
 }
 
-var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
-var file_message_proto_goTypes = []any{
-	(*DataBlock)(nil), // 0: message.DataBlock
+var file_pkg_protobuf_message_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_pkg_protobuf_message_proto_goTypes = []any{
+	(*DataBlock)(nil),             // 0: message.DataBlock
+	(*Block)(nil),                 // 1: message.Block
+	(*timestamppb.Timestamp)(nil), // 2: google.protobuf.Timestamp
 }
-var file_message_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+var file_pkg_protobuf_message_proto_depIdxs = []int32{
+	2, // 0: message.Block.timestamp:type_name -> google.protobuf.Timestamp
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_message_proto_init() }
-func file_message_proto_init() {
-	if File_message_proto != nil {
+func init() { file_pkg_protobuf_message_proto_init() }
+func file_pkg_protobuf_message_proto_init() {
+	if File_pkg_protobuf_message_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_message_proto_rawDesc), len(file_message_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_protobuf_message_proto_rawDesc), len(file_pkg_protobuf_message_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_message_proto_goTypes,
-		DependencyIndexes: file_message_proto_depIdxs,
-		MessageInfos:      file_message_proto_msgTypes,
+		GoTypes:           file_pkg_protobuf_message_proto_goTypes,
+		DependencyIndexes: file_pkg_protobuf_message_proto_depIdxs,
+		MessageInfos:      file_pkg_protobuf_message_proto_msgTypes,
 	}.Build()
-	File_message_proto = out.File
-	file_message_proto_goTypes = nil
-	file_message_proto_depIdxs = nil
+	File_pkg_protobuf_message_proto = out.File
+	file_pkg_protobuf_message_proto_goTypes = nil
+	file_pkg_protobuf_message_proto_depIdxs = nil
 }
