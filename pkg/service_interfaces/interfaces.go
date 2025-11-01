@@ -59,7 +59,7 @@ type RequestBlockService interface {
 type PublishBlockService interface {
 	Start()
 	Stop()
-	GetFilteredBlockChannel() <-chan *domain.InboundMessage
+	GetFilteredBlockChannel() <-chan *domain.Block
 }
 
 type InterestedChainsService interface {

@@ -27,7 +27,7 @@ type databaseService struct {
 func GetService() service_interfaces.DatabaseService {
 	once.Do(func() {
 		singletonService = &databaseService{
-			dbPath: "./blockstorage", // Database files will be stored in a 'badger' directory.
+			dbPath: "./blockstorage",
 		}
 	})
 	return singletonService
@@ -35,12 +35,8 @@ func GetService() service_interfaces.DatabaseService {
 
 // Start opens the BadgerDB database file. It must be called once at application startup.
 func (s *databaseService) Start() error {
-	opts := badger.DefaultOptions(s.dbPath)
-	// You can enable it for debugging if needed.
-	opts.Logger = nil
-
 	var err error
-	s.db, err = badger.Open(opts)
+	s.db, err = badger.Open(badger.DefaultOptions(s.dbPath))
 	if err != nil {
 		return fmt.Errorf("failed to open badger database: %w", err)
 	}
@@ -74,6 +70,9 @@ func (s *databaseService) StoreBlock(block *domain.Block) error {
 
 		// 3. Set the key and value in the database.
 		err = txn.Set([]byte(block.ID), blockBytes)
+
+		//Debugger
+		// err := txn.Set([]byte("block_1760277367933788000"), []byte("hi"))
 		return err
 	})
 }
@@ -83,6 +82,9 @@ func (s *databaseService) FetchBlock(id string) (*domain.Block, error) {
 	var blockData []byte
 
 	err := s.db.View(func(txn *badger.Txn) error {
+
+		//Debugger
+		// item, err := txn.Get([]byte("block_1760277367933788000"))
 		item, err := txn.Get([]byte(id))
 		if err != nil {
 			if err == badger.ErrKeyNotFound {
@@ -90,6 +92,15 @@ func (s *databaseService) FetchBlock(id string) (*domain.Block, error) {
 			}
 			return err
 		}
+
+		// Debugger
+		// k := append([]byte{}, item.Key()...)
+		// v, err := item.ValueCopy(nil)
+		// if err != nil {
+		// 	return err
+		// }
+
+		// log.Printf("DEBUG: [DatabaseService] Key=%s, Value=%s", k, v)
 
 		// The item.Value method retrieves the byte slice.
 		// We copy it to our blockData variable to use outside the transaction.
