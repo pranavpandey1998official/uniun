@@ -2,36 +2,40 @@ package main
 
 import (
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"uniun/network/internal/transport"
-	"uniun/network/internal/usecase"
+	// Import concrete service packages
+	connectionservice "uniun/services/connection_service"
+	database "uniun/services/database"
+	messagerouting "uniun/services/message_routing"
+	requestblock "uniun/services/request_block"
 )
 
 func main() {
-	mgr := usecase.NewManager()
-	defer mgr.Stop()
+	// --- Dependency Injection and Service Composition ---
+	// Create singleton service instance using their constructors.
+	connService := connectionservice.GetService() // Singleton instance
+	msgRoutingService := messagerouting.GetService()
+	databaseService := database.GetService()
+	requestBlockService := requestblock.GetService()
+	// --- Start Services ---
+	log.Println("Starting services...")
+	go connService.Start()
+	go msgRoutingService.Start()
+	go databaseService.Start()
+	go requestBlockService.Start()
 
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		transport.ServeWS(mgr, w, r)
-	})
-
-	srv := &http.Server{Addr: ":8080"}
-
-	go func() {
-		log.Println("Server listening on :8080")
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %v", err)
-		}
-	}()
-
-	// graceful shutdown on SIGINT/SIGTERM
+	// Wait for interrupt signal to gracefully shutdown
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
-	log.Println("Shutting down server")
-	_ = srv.Close()
+
+	log.Println("Shutting down application...")
+
+	connService.Stop()
+	msgRoutingService.Stop()
+
+	log.Println("Application gracefully stopped")
 }
